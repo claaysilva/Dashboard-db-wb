@@ -47,6 +47,12 @@ function sanitizeDate(value: unknown): string {
   return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "";
 }
 
+function toNextDay(dateISO: string): string {
+  const [year, month, day] = dateISO.split("-").map(Number);
+  const dt = new Date(Date.UTC(year, month - 1, day + 1));
+  return dt.toISOString().slice(0, 10);
+}
+
 function sanitizeStringArray(value: unknown, maxItems = 300): string[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -87,7 +93,7 @@ function buildBase(
   if (f.professor !== "Todos") q = q.eq("Professor", f.professor);
   if (f.evento !== "Todos") q = q.eq("evento", f.evento);
   if (f.dataInicio) q = q.gte("data_ultima_venda", f.dataInicio);
-  if (f.dataFim) q = q.lte("data_ultima_venda", f.dataFim);
+  if (f.dataFim) q = q.lt("data_ultima_venda", toNextDay(f.dataFim));
   return q;
 }
 
@@ -154,7 +160,8 @@ async function contarGrupo(
     if (campo !== "evento" && filtros.evento !== "Todos")
       q = q.eq("evento", filtros.evento);
     if (filtros.dataInicio) q = q.gte("data_ultima_venda", filtros.dataInicio);
-    if (filtros.dataFim) q = q.lte("data_ultima_venda", filtros.dataFim);
+    if (filtros.dataFim)
+      q = q.lt("data_ultima_venda", toNextDay(filtros.dataFim));
 
     return q;
   };
