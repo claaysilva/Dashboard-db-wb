@@ -171,41 +171,49 @@ export default function Dashboard() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {linhas.map((row, i) => (
-              <tr
-                key={row.nome}
-                className={`hover:bg-blue-50/40 transition-colors ${i % 2 === 0 ? "" : "bg-gray-50/50"}`}
-              >
-                <td className="px-5 py-3 font-semibold text-gray-800">
-                  {row.nome}
-                </td>
-                <td className="px-5 py-3 text-right">
-                  <span className="font-bold text-gray-800 bg-gray-100 px-3 py-1 rounded-full text-xs">
-                    {fmt(row.total)}
-                  </span>
-                </td>
-                <td className="px-5 py-3 text-right">
-                  <span className="text-amber-700 bg-amber-50 px-3 py-1 rounded-full text-xs font-semibold">
-                    {fmt(row.pendentes)}
-                  </span>
-                </td>
-                <td className="px-5 py-3 text-right">
-                  <span className="text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full text-xs font-semibold">
-                    {fmt(row.enviados)}
-                  </span>
-                </td>
-                <td className="px-5 py-3 text-right">
-                  <span className="text-orange-700 bg-orange-50 px-3 py-1 rounded-full text-xs font-semibold">
-                    {fmt(row.falhou)}
-                  </span>
-                </td>
-                <td className="px-5 py-3 text-right">
-                  <span className="text-rose-700 bg-rose-50 px-3 py-1 rounded-full text-xs font-semibold">
-                    {fmt(row.bloqueados)}
-                  </span>
+            {linhas.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-5 py-6 text-center text-gray-500">
+                  Sem dados para os filtros selecionados.
                 </td>
               </tr>
-            ))}
+            ) : (
+              linhas.map((row, i) => (
+                <tr
+                  key={row.nome}
+                  className={`hover:bg-blue-50/40 transition-colors ${i % 2 === 0 ? "" : "bg-gray-50/50"}`}
+                >
+                  <td className="px-5 py-3 font-semibold text-gray-800">
+                    {row.nome}
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    <span className="font-bold text-gray-800 bg-gray-100 px-3 py-1 rounded-full text-xs">
+                      {fmt(row.total)}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    <span className="text-amber-700 bg-amber-50 px-3 py-1 rounded-full text-xs font-semibold">
+                      {fmt(row.pendentes)}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    <span className="text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full text-xs font-semibold">
+                      {fmt(row.enviados)}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    <span className="text-orange-700 bg-orange-50 px-3 py-1 rounded-full text-xs font-semibold">
+                      {fmt(row.falhou)}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    <span className="text-rose-700 bg-rose-50 px-3 py-1 rounded-full text-xs font-semibold">
+                      {fmt(row.bloqueados)}
+                    </span>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
           <tfoot>
             <tr className="bg-gradient-to-r from-gray-100 to-gray-50 border-t-2 border-gray-200">
@@ -539,24 +547,20 @@ export default function Dashboard() {
             </div>
 
             {/* BREAKDOWN PROFESSOR */}
-            {breakdownProfessores.length > 0 && (
-              <TabelaBreakdown
-                titulo="Por Professor"
-                icone="👨‍🏫"
-                linhas={breakdownProfessores}
-                gradiente="bg-gradient-to-r from-blue-600 to-blue-700"
-              />
-            )}
+            <TabelaBreakdown
+              titulo="Por Professor"
+              icone="👨‍🏫"
+              linhas={breakdownProfessores}
+              gradiente="bg-gradient-to-r from-blue-600 to-blue-700"
+            />
 
             {/* BREAKDOWN EVENTO */}
-            {breakdownEventos.length > 0 && (
-              <TabelaBreakdown
-                titulo="Por Evento"
-                icone="📌"
-                linhas={breakdownEventos}
-                gradiente="bg-gradient-to-r from-indigo-600 to-violet-700"
-              />
-            )}
+            <TabelaBreakdown
+              titulo="Por Evento"
+              icone="📌"
+              linhas={breakdownEventos}
+              gradiente="bg-gradient-to-r from-indigo-600 to-violet-700"
+            />
           </div>
         )}
       </div>

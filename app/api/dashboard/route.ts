@@ -20,7 +20,17 @@ type Filtros = {
   dataFim: string;
 };
 
+type OptionsCache = {
+  expiresAt: number;
+  professores: string[];
+  eventos: string[];
+};
+
 const ALLOWED_STATUS = ["Todos", "enviado", "pendente", "falhou", "bloqueado"];
+const OPTIONS_CACHE_TTL_MS = 5 * 60 * 1000;
+const MAX_GROUPS_PER_BREAKDOWN = 120;
+
+let optionsCache: OptionsCache | null = null;
 
 function getEnvOrThrow(name: string): string {
   const value = process.env[name];
@@ -58,13 +68,13 @@ function toNextDay(dateISO: string): string {
   return dt.toISOString().slice(0, 10);
 }
 
-function sanitizeStringArray(value: unknown, maxItems = 300): string[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .filter((item) => typeof item === "string")
-    .map((item) => item.slice(0, 120))
-    .filter(Boolean)
-    .slice(0, maxItems);
+function getProfessoresWhitelist(): string[] {
+  const raw = process.env.PROFESSORES_WHITELIST;
+  if (!raw) return [];
+  return raw
+    .split("|")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function normalizeFiltros(raw: unknown): Filtros {
@@ -144,7 +154,56 @@ async function loadDistinctOptions(supabase: SupabaseClient) {
     ].sort();
   }
 
+  const whitelist = getProfessoresWhitelist();
+  if (whitelist.length > 0) {
+    const whitelistSet = new Set(whitelist);
+    professores = professores.filter((p) => whitelistSet.has(p));
+  }
+
   return { professores, eventos };
+}
+
+async function getOptionsCached(supabase: SupabaseClient) {
+  const now = Date.now();
+  if (optionsCache && optionsCache.expiresAt > now) {
+    return {
+      professores: optionsCache.professores,
+      eventos: optionsCache.eventos,
+    };
+  }
+
+  const loaded = await loadDistinctOptions(supabase);
+  optionsCache = {
+    expiresAt: now + OPTIONS_CACHE_TTL_MS,
+    professores: loaded.professores,
+    eventos: loaded.eventos,
+  };
+
+  return loaded;
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const safeConcurrency = Math.max(1, concurrency);
+  const results: R[] = new Array(items.length);
+  let index = 0;
+
+  const workers = Array.from({ length: Math.min(safeConcurrency, items.length) }).map(
+    async () => {
+      while (true) {
+        const currentIndex = index;
+        index += 1;
+        if (currentIndex >= items.length) return;
+        results[currentIndex] = await mapper(items[currentIndex]);
+      }
+    },
+  );
+
+  await Promise.all(workers);
+  return results;
 }
 
 async function contarGrupo(
@@ -172,11 +231,11 @@ async function contarGrupo(
   };
 
   const [
-    { count: total },
-    { count: pendentes },
-    { count: enviados },
-    { count: falhou },
-    { count: bloqueados },
+    { count: total, error: e1 },
+    { count: pendentes, error: e2 },
+    { count: enviados, error: e3 },
+    { count: falhou, error: e4 },
+    { count: bloqueados, error: e5 },
   ] = await Promise.all([
     base(),
     base().ilike("status_envio", "pendente%"),
@@ -186,6 +245,17 @@ async function contarGrupo(
     ),
     base().eq("bloqueado", true),
   ]);
+
+  if (e1 || e2 || e3 || e4 || e5) {
+    return {
+      nome: valor,
+      total: 0,
+      pendentes: 0,
+      enviados: 0,
+      falhou: 0,
+      bloqueados: 0,
+    };
+  }
 
   return {
     nome: valor,
@@ -204,7 +274,7 @@ export async function POST(request: Request) {
     const type = sanitizeText(body.type, 20);
 
     if (type === "options") {
-      const { professores, eventos } = await loadDistinctOptions(supabase);
+      const { professores, eventos } = await getOptionsCached(supabase);
       return NextResponse.json({ professores, eventos });
     }
 
@@ -216,8 +286,8 @@ export async function POST(request: Request) {
     }
 
     const filtros = normalizeFiltros(body.filtros);
-    const professoresBase = sanitizeStringArray(body.professoresBase);
-    const eventosBase = sanitizeStringArray(body.eventosBase);
+    const { professores: professoresBase, eventos: eventosBase } =
+      await getOptionsCached(supabase);
 
     const countMode: "exact" | "planned" = hasStrongFilter(filtros)
       ? "exact"
@@ -267,20 +337,22 @@ export async function POST(request: Request) {
     }
 
     const professoresParaBreakdown =
-      filtros.professor === "Todos" ? professoresBase : [filtros.professor];
+      (filtros.professor === "Todos" ? professoresBase : [filtros.professor])
+        .slice(0, MAX_GROUPS_PER_BREAKDOWN);
     const eventosParaBreakdown =
-      filtros.evento === "Todos" ? eventosBase : [filtros.evento];
+      (filtros.evento === "Todos" ? eventosBase : [filtros.evento])
+        .slice(0, MAX_GROUPS_PER_BREAKDOWN);
 
     const [rowsProf, rowsEvt] = await Promise.all([
-      Promise.all(
-        professoresParaBreakdown.map((p) =>
-          contarGrupo(supabase, "Professor", p, filtros, countMode),
-        ),
+      mapWithConcurrency(
+        professoresParaBreakdown,
+        8,
+        (p) => contarGrupo(supabase, "Professor", p, filtros, countMode),
       ),
-      Promise.all(
-        eventosParaBreakdown.map((ev) =>
-          contarGrupo(supabase, "evento", ev, filtros, countMode),
-        ),
+      mapWithConcurrency(
+        eventosParaBreakdown,
+        8,
+        (ev) => contarGrupo(supabase, "evento", ev, filtros, countMode),
       ),
     ]);
 
