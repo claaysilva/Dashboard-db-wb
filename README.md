@@ -1,5 +1,24 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Environment variables (required)
+
+Create a `.env.local` file based on `.env.example`:
+
+```bash
+cp .env.example .env.local
+```
+
+Fill these variables:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+Security notes:
+
+- Supabase access was moved to a server route (`app/api/dashboard/route.ts`).
+- No Supabase key or URL is exposed in `app/page.tsx`.
+- Never commit `.env.local`.
+
 ## Getting Started
 
 First, run the development server:
