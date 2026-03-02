@@ -41,6 +41,11 @@ function sanitizeText(value: unknown, max = 120): string {
   return value.trim().slice(0, max);
 }
 
+function sanitizeOptionValue(value: unknown, max = 120): string {
+  if (typeof value !== "string") return "Todos";
+  return value.slice(0, max);
+}
+
 function sanitizeDate(value: unknown): string {
   if (typeof value !== "string") return "";
   const v = value.trim();
@@ -57,7 +62,7 @@ function sanitizeStringArray(value: unknown, maxItems = 300): string[] {
   if (!Array.isArray(value)) return [];
   return value
     .filter((item) => typeof item === "string")
-    .map((item) => item.trim())
+    .map((item) => item.slice(0, 120))
     .filter(Boolean)
     .slice(0, maxItems);
 }
@@ -66,9 +71,9 @@ function normalizeFiltros(raw: unknown): Filtros {
   const obj = (raw ?? {}) as Record<string, unknown>;
   const status = sanitizeText(obj.status);
   return {
-    professor: sanitizeText(obj.professor),
+    professor: sanitizeOptionValue(obj.professor),
     status: ALLOWED_STATUS.includes(status) ? status : "Todos",
-    evento: sanitizeText(obj.evento),
+    evento: sanitizeOptionValue(obj.evento),
     dataInicio: sanitizeDate(obj.dataInicio),
     dataFim: sanitizeDate(obj.dataFim),
   };
