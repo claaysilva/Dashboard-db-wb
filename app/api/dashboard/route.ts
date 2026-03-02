@@ -191,16 +191,16 @@ async function mapWithConcurrency<T, R>(
   const results: R[] = new Array(items.length);
   let index = 0;
 
-  const workers = Array.from({ length: Math.min(safeConcurrency, items.length) }).map(
-    async () => {
-      while (true) {
-        const currentIndex = index;
-        index += 1;
-        if (currentIndex >= items.length) return;
-        results[currentIndex] = await mapper(items[currentIndex]);
-      }
-    },
-  );
+  const workers = Array.from({
+    length: Math.min(safeConcurrency, items.length),
+  }).map(async () => {
+    while (true) {
+      const currentIndex = index;
+      index += 1;
+      if (currentIndex >= items.length) return;
+      results[currentIndex] = await mapper(items[currentIndex]);
+    }
+  });
 
   await Promise.all(workers);
   return results;
@@ -336,23 +336,19 @@ export async function POST(request: Request) {
       );
     }
 
-    const professoresParaBreakdown =
-      (filtros.professor === "Todos" ? professoresBase : [filtros.professor])
-        .slice(0, MAX_GROUPS_PER_BREAKDOWN);
-    const eventosParaBreakdown =
-      (filtros.evento === "Todos" ? eventosBase : [filtros.evento])
-        .slice(0, MAX_GROUPS_PER_BREAKDOWN);
+    const professoresParaBreakdown = (
+      filtros.professor === "Todos" ? professoresBase : [filtros.professor]
+    ).slice(0, MAX_GROUPS_PER_BREAKDOWN);
+    const eventosParaBreakdown = (
+      filtros.evento === "Todos" ? eventosBase : [filtros.evento]
+    ).slice(0, MAX_GROUPS_PER_BREAKDOWN);
 
     const [rowsProf, rowsEvt] = await Promise.all([
-      mapWithConcurrency(
-        professoresParaBreakdown,
-        8,
-        (p) => contarGrupo(supabase, "Professor", p, filtros, countMode),
+      mapWithConcurrency(professoresParaBreakdown, 8, (p) =>
+        contarGrupo(supabase, "Professor", p, filtros, countMode),
       ),
-      mapWithConcurrency(
-        eventosParaBreakdown,
-        8,
-        (ev) => contarGrupo(supabase, "evento", ev, filtros, countMode),
+      mapWithConcurrency(eventosParaBreakdown, 8, (ev) =>
+        contarGrupo(supabase, "evento", ev, filtros, countMode),
       ),
     ]);
 
