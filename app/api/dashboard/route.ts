@@ -233,7 +233,10 @@ export async function POST(request: Request) {
     ] = await Promise.all([
       totalQuery,
       buildBase(supabase, filtros, countMode).ilike("status_envio", "enviado%"),
-      buildBase(supabase, filtros, countMode).ilike("status_envio", "pendente%"),
+      buildBase(supabase, filtros, countMode).ilike(
+        "status_envio",
+        "pendente%",
+      ),
       buildBase(supabase, filtros, countMode).or(
         "status_envio.ilike.falhou*,status_envio.ilike.erro*,status_envio.ilike.failed*",
       ),
