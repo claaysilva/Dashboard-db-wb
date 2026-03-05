@@ -13,7 +13,7 @@ type BreakdownRow = {
 };
 
 type Filtros = {
-  professor: string;
+  professores: string[];
   status: string;
   evento: string;
   dataInicio: string;
@@ -56,6 +56,19 @@ function sanitizeOptionValue(value: unknown, max = 120): string {
   return value.slice(0, max);
 }
 
+function sanitizeOptionList(
+  value: unknown,
+  maxItems = 200,
+  max = 120,
+): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.slice(0, max))
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
+
 function sanitizeDate(value: unknown): string {
   if (typeof value !== "string") return "";
   const v = value.trim();
@@ -80,8 +93,15 @@ function getProfessoresWhitelist(): string[] {
 function normalizeFiltros(raw: unknown): Filtros {
   const obj = (raw ?? {}) as Record<string, unknown>;
   const status = sanitizeText(obj.status);
+  const professorUnico = sanitizeOptionValue(obj.professor);
+  const professores = sanitizeOptionList(obj.professores);
+
+  if (professores.length === 0 && professorUnico !== "Todos") {
+    professores.push(professorUnico);
+  }
+
   return {
-    professor: sanitizeOptionValue(obj.professor),
+    professores,
     status: ALLOWED_STATUS.includes(status) ? status : "Todos",
     evento: sanitizeOptionValue(obj.evento),
     dataInicio: sanitizeDate(obj.dataInicio),
@@ -91,7 +111,7 @@ function normalizeFiltros(raw: unknown): Filtros {
 
 function hasStrongFilter(f: Filtros): boolean {
   return (
-    f.professor !== "Todos" ||
+    f.professores.length > 0 ||
     f.evento !== "Todos" ||
     Boolean(f.dataInicio) ||
     Boolean(f.dataFim) ||
@@ -105,7 +125,7 @@ function buildBase(
   countMode: "exact" | "planned",
 ) {
   let q = supabase.from("leads").select("id", { count: countMode, head: true });
-  if (f.professor !== "Todos") q = q.eq("Professor", f.professor);
+  if (f.professores.length > 0) q = q.in("Professor", f.professores);
   if (f.evento !== "Todos") q = q.eq("evento", f.evento);
   if (f.dataInicio) q = q.gte("data_ultima_venda", f.dataInicio);
   if (f.dataFim) q = q.lt("data_ultima_venda", toNextDay(f.dataFim));
@@ -219,8 +239,8 @@ async function contarGrupo(
       .select("id", { count: countMode, head: true })
       .eq(campo, valor);
 
-    if (campo !== "Professor" && filtros.professor !== "Todos")
-      q = q.eq("Professor", filtros.professor);
+    if (campo !== "Professor" && filtros.professores.length > 0)
+      q = q.in("Professor", filtros.professores);
     if (campo !== "evento" && filtros.evento !== "Todos")
       q = q.eq("evento", filtros.evento);
     if (filtros.dataInicio) q = q.gte("data_ultima_venda", filtros.dataInicio);
@@ -289,6 +309,13 @@ export async function POST(request: Request) {
     const { professores: professoresBase, eventos: eventosBase } =
       await getOptionsCached(supabase);
 
+    if (filtros.professores.length > 0) {
+      const professoresValidos = new Set(professoresBase);
+      filtros.professores = filtros.professores.filter((p) =>
+        professoresValidos.has(p),
+      );
+    }
+
     const countMode: "exact" | "planned" = hasStrongFilter(filtros)
       ? "exact"
       : "planned";
@@ -337,7 +364,7 @@ export async function POST(request: Request) {
     }
 
     const professoresParaBreakdown = (
-      filtros.professor === "Todos" ? professoresBase : [filtros.professor]
+      filtros.professores.length === 0 ? professoresBase : filtros.professores
     ).slice(0, MAX_GROUPS_PER_BREAKDOWN);
     const eventosParaBreakdown = (
       filtros.evento === "Todos" ? eventosBase : [filtros.evento]

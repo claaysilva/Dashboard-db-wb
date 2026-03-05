@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:clean": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$workspace=(Get-Location).Path; Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'node.exe' -and $_.CommandLine -like '*next*dev*' -and $_.CommandLine -like ('*' + $workspace + '*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }; Remove-Item '.next\\dev\\lock' -Force -ErrorAction SilentlyContinue; npm run dev\"",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 type BreakdownRow = {
   nome: string;
@@ -26,7 +26,9 @@ export default function Dashboard() {
   const [professores, setProfessores] = useState<string[]>([]);
   const [eventos, setEventos] = useState<string[]>([]);
 
-  const [filtroProfessor, setFiltroProfessor] = useState("Todos");
+  const [filtroProfessores, setFiltroProfessores] = useState<string[]>([]);
+  const [menuProfessoresAberto, setMenuProfessoresAberto] = useState(false);
+  const menuProfessoresRef = useRef<HTMLDivElement>(null);
   const [filtroStatus, setFiltroStatus] = useState("Todos");
   const [filtroEvento, setFiltroEvento] = useState("Todos");
   const [dataInicio, setDataInicio] = useState("");
@@ -44,9 +46,6 @@ export default function Dashboard() {
 
   const [loading, setLoading] = useState(false);
   const [buscaFeita, setBuscaFeita] = useState(false);
-  const [modoContagem, setModoContagem] = useState<"exact" | "planned">(
-    "exact",
-  );
 
   useEffect(() => {
     const carregarOpcoes = async () => {
@@ -76,6 +75,36 @@ export default function Dashboard() {
     carregarOpcoes();
   }, []);
 
+  useEffect(() => {
+    const handleClickFora = (event: MouseEvent) => {
+      if (!menuProfessoresAberto) return;
+      if (
+        menuProfessoresRef.current &&
+        !menuProfessoresRef.current.contains(event.target as Node)
+      ) {
+        setMenuProfessoresAberto(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickFora);
+    return () => document.removeEventListener("mousedown", handleClickFora);
+  }, [menuProfessoresAberto]);
+
+  const alternarProfessor = (professor: string) => {
+    setFiltroProfessores((atual) =>
+      atual.includes(professor)
+        ? atual.filter((p) => p !== professor)
+        : [...atual, professor],
+    );
+  };
+
+  const labelProfessores =
+    filtroProfessores.length === 0
+      ? "Todos"
+      : filtroProfessores.length === 1
+        ? filtroProfessores[0]
+        : `${filtroProfessores.length} selecionados`;
+
   const carregarDados = async () => {
     setBuscaFeita(true);
     setLoading(true);
@@ -86,7 +115,7 @@ export default function Dashboard() {
         body: JSON.stringify({
           type: "search",
           filtros: {
-            professor: filtroProfessor,
+            professores: filtroProfessores,
             status: filtroStatus,
             evento: filtroEvento,
             dataInicio,
@@ -111,7 +140,6 @@ export default function Dashboard() {
       setTotalBloqueados(dados.totalBloqueados ?? 0);
       setBreakdownProfessores(dados.breakdownProfessores ?? []);
       setBreakdownEventos(dados.breakdownEventos ?? []);
-      setModoContagem(dados.modoContagem ?? "exact");
     } catch (e) {
       console.error("Erro ao buscar dados:", e);
     } finally {
@@ -285,22 +313,48 @@ export default function Dashboard() {
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 p-6 rounded-2xl mb-8 flex flex-wrap gap-4 items-end">
           <div>
             <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-              Professor
+              Professores
             </label>
-            <select
-              value={filtroProfessor}
-              onChange={(e) => setFiltroProfessor(e.target.value)}
-              className="border border-white/20 p-2.5 rounded-xl w-48 bg-white/10 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-            >
-              <option value="Todos" className="text-gray-800">
-                Todos
-              </option>
-              {professores.map((p) => (
-                <option key={p} value={p} className="text-gray-800">
-                  {p}
-                </option>
-              ))}
-            </select>
+            <div ref={menuProfessoresRef} className="relative w-56">
+              <button
+                type="button"
+                onClick={() => setMenuProfessoresAberto((aberto) => !aberto)}
+                className="border border-white/20 p-2.5 rounded-xl w-full bg-white/10 text-white focus:ring-2 focus:ring-blue-500 outline-none flex items-center justify-between"
+              >
+                <span className="truncate">{labelProfessores}</span>
+                <span className="text-slate-300">▾</span>
+              </button>
+
+              {menuProfessoresAberto && (
+                <div className="absolute z-20 mt-1 w-full rounded-xl border border-white/20 bg-slate-900/95 backdrop-blur-sm p-2 max-h-60 overflow-y-auto shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => setFiltroProfessores([])}
+                    className="w-full text-left text-sm px-2 py-1.5 rounded-md text-slate-200 hover:bg-white/10"
+                  >
+                    Todos
+                  </button>
+                  <div className="my-1 h-px bg-white/10" />
+                  {professores.map((p) => {
+                    const marcado = filtroProfessores.includes(p);
+                    return (
+                      <label
+                        key={p}
+                        className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-slate-200 hover:bg-white/10 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={marcado}
+                          onChange={() => alternarProfessor(p)}
+                          className="accent-blue-500"
+                        />
+                        <span className="truncate">{p}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           <div>
@@ -406,7 +460,7 @@ export default function Dashboard() {
             </button>
             <button
               onClick={() => {
-                setFiltroProfessor("Todos");
+                setFiltroProfessores([]);
                 setFiltroStatus("Todos");
                 setFiltroEvento("Todos");
                 setDataInicio("");
@@ -455,94 +509,86 @@ export default function Dashboard() {
             {/* CARDS GERAIS */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-5">
               <div
-                className="rounded-2xl p-6 flex flex-col gap-3"
+                className="rounded-2xl p-6 flex flex-col gap-2 items-center text-center"
                 style={{
                   background: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
                 }}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex flex-col gap-1">
-                    <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider">
-                      Total Filtrado
-                    </p>
-                    <span className="text-[10px] font-semibold uppercase tracking-wider bg-white/20 text-blue-50 px-2 py-0.5 rounded-full w-fit">
-                      {modoContagem === "exact" ? "exato" : "estimado"}
-                    </span>
-                  </div>
-                  <span className="text-2xl">📊</span>
+                <div className="flex flex-col gap-1 items-center">
+                  <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider">
+                    Total Filtrado
+                  </p>
                 </div>
-                <p className="text-4xl font-bold text-white">
+                <p className="text-4xl font-bold text-white leading-none">
                   {fmt(totalLeads)}
                 </p>
-                <p className="text-blue-200 text-xs">leads encontrados</p>
+                <p className="text-blue-200 text-xs font-medium">
+                  leads encontrados
+                </p>
               </div>
               <div
-                className="rounded-2xl p-6 flex flex-col gap-3"
+                className="rounded-2xl p-6 flex flex-col gap-2 items-center text-center"
                 style={{
                   background: "linear-gradient(135deg, #f59e0b, #d97706)",
                 }}
               >
-                <div className="flex items-center justify-between">
-                  <p className="text-amber-100 text-xs font-semibold uppercase tracking-wider">
-                    Pendentes
-                  </p>
-                  <span className="text-2xl">⏳</span>
-                </div>
-                <p className="text-4xl font-bold text-white">
+                <p className="text-amber-100 text-xs font-semibold uppercase tracking-wider">
+                  Pendentes
+                </p>
+                <p className="text-4xl font-bold text-white leading-none">
                   {fmt(totalPendentes)}
                 </p>
-                <p className="text-amber-200 text-xs">aguardando disparo</p>
+                <p className="text-amber-200 text-xs font-medium">
+                  aguardando disparo
+                </p>
               </div>
               <div
-                className="rounded-2xl p-6 flex flex-col gap-3"
+                className="rounded-2xl p-6 flex flex-col gap-2 items-center text-center"
                 style={{
                   background: "linear-gradient(135deg, #10b981, #059669)",
                 }}
               >
-                <div className="flex items-center justify-between">
-                  <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">
-                    Enviados
-                  </p>
-                  <span className="text-2xl">✅</span>
-                </div>
-                <p className="text-4xl font-bold text-white">
+                <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">
+                  Enviados
+                </p>
+                <p className="text-4xl font-bold text-white leading-none">
                   {fmt(totalEnviados)}
                 </p>
-                <p className="text-emerald-200 text-xs">mensagens disparadas</p>
+                <p className="text-emerald-200 text-xs font-medium">
+                  mensagens disparadas
+                </p>
               </div>
               <div
-                className="rounded-2xl p-6 flex flex-col gap-3"
+                className="rounded-2xl p-6 flex flex-col gap-2 items-center text-center"
                 style={{
                   background: "linear-gradient(135deg, #f97316, #c2410c)",
                 }}
               >
-                <div className="flex items-center justify-between">
-                  <p className="text-orange-100 text-xs font-semibold uppercase tracking-wider">
-                    Falhou
-                  </p>
-                  <span className="text-2xl">⚠️</span>
-                </div>
-                <p className="text-4xl font-bold text-white">
+                <p className="text-orange-100 text-xs font-semibold uppercase tracking-wider">
+                  Falhou
+                </p>
+                <p className="text-4xl font-bold text-white leading-none">
                   {fmt(totalFalhou)}
                 </p>
-                <p className="text-orange-200 text-xs">erro no disparo</p>
+                <p className="text-orange-200 text-xs font-medium">
+                  erro no disparo
+                </p>
               </div>
               <div
-                className="rounded-2xl p-6 flex flex-col gap-3"
+                className="rounded-2xl p-6 flex flex-col gap-2 items-center text-center"
                 style={{
                   background: "linear-gradient(135deg, #f43f5e, #be123c)",
                 }}
               >
-                <div className="flex items-center justify-between">
-                  <p className="text-rose-100 text-xs font-semibold uppercase tracking-wider">
-                    Bloqueados
-                  </p>
-                  <span className="text-2xl">🚫</span>
-                </div>
-                <p className="text-4xl font-bold text-white">
+                <p className="text-rose-100 text-xs font-semibold uppercase tracking-wider">
+                  Bloqueados
+                </p>
+                <p className="text-4xl font-bold text-white leading-none">
                   {fmt(totalBloqueados)}
                 </p>
-                <p className="text-rose-200 text-xs">números bloqueados</p>
+                <p className="text-rose-200 text-xs font-medium">
+                  números bloqueados
+                </p>
               </div>
             </div>
 
